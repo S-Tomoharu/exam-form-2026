@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理者用：データ管理</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        
+        const Upload = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+        );
+        
+        const ExternalLink = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+        );
+        
+        const FileText = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+        );
+        
+        const Database = ({ size = 24 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+            </svg>
+        );
+
+        const AdminPanel = () => {
+            // スプレッドシートのURL（あなたのスプレッドシートのURL）
+            const SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1CM-4Uk88pwXgwdJEF6e3NNxQc0XJ5k2AGWfg-GKwpSA/edit?gid=0#gid=0';
+            
+            const [universityData, setUniversityData] = useState({});
+            const [uploadStatus, setUploadStatus] = useState('');
+
+            useEffect(() => {
+                loadUniversityData();
+            }, []);
+
+            const loadUniversityData = () => {
+                const saved = localStorage.getItem('universityData');
+                if (saved) {
+                    setUniversityData(JSON.parse(saved));
+                }
+            };
+
+            const handleUniversityCSV = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                setUploadStatus('読み込み中...');
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const text = event.target.result;
+                        const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+                        
+                        const data = {};
+                        lines.slice(1).forEach(line => {
+                            const [university, faculty, department, examType] = line.split(',').map(s => s.trim());
+                            if (university && faculty && examType) {
+                                const key = `${university}_${faculty}_${department || ''}_${examType}`;
+                                data[key] = { university, faculty, department: department || '', examType };
+                            }
+                        });
+                        
+                        setUniversityData(data);
+                        localStorage.setItem('universityData', JSON.stringify(data));
+                        setUploadStatus(`✓ ${Object.keys(data).length}件の大学データを読み込みました`);
+                        
+                        setTimeout(() => setUploadStatus(''), 3000);
+                    } catch (error) {
+                        setUploadStatus('❌ エラー: CSVの形式を確認してください');
+                        setTimeout(() => setUploadStatus(''), 3000);
+                    }
+                };
+                reader.readAsText(file);
+                e.target.value = '';
+            };
+
+            const downloadSampleCSV = () => {
+                const csv = '大学名,学部,学科,試験区分\n東京大学,文学部,哲学科,前期\n東京大学,文学部,哲学科,後期\n京都大学,文学部,人文学科,前期\n早稲田大学,政治経済学部,政治学科,私立\n慶應義塾大学,経済学部,経済学科,私立\n上智大学,文学部,,私立\n明治大学,政治経済学部,,私立';
+                const bom = '\uFEFF';
+                const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'サンプル_大学データ.csv';
+                link.click();
+            };
+
+            const openSpreadsheet = () => {
+                window.open(SPREADSHEET_URL, '_blank');
+            };
+
+            // 試験区分の種類を集計
+            const examTypes = [...new Set(Object.values(universityData).map(d => d.examType))];
+            const universityCount = [...new Set(Object.values(universityData).map(d => d.university))].length;
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 p-4">
+                    <div className="max-w-4xl mx-auto space-y-6">
+                        <div className="bg-white rounded-lg shadow-lg p-8">
+                            <h1 className="text-3xl font-bold text-gray-800 mb-2">管理者用：データ管理</h1>
+                            <p className="text-gray-600 mb-8">大学データの管理と提出データの確認</p>
+                            
+                            {/* 大学データCSV読み込み */}
+                            <div className="mb-8 border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-blue-400 transition-colors">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <Upload size={24} className="text-blue-600" />
+                                    <h2 className="text-xl font-semibold text-gray-800">大学データCSV読み込み</h2>
+                                </div>
+                                
+                                <p className="text-sm text-gray-600 mb-4">
+                                    大学・学部・学科・試験区分のデータをCSVファイルで一括登録できます。
+                                </p>
+                                
+                                <div className="space-y-3">
+                                    <label className="block">
+                                        <div className="flex items-center justify-center w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-colors">
+                                            <Upload size={20} className="mr-2" />
+                                            <span className="font-medium">CSVファイルを選択</span>
+                                        </div>
+                                        <input
+                                            type="file"
+                                            accept=".csv"
+                                            onChange={handleUniversityCSV}
+                                            className="hidden"
+                                        />
+                                    </label>
+                                    
+                                    <button
+                                        onClick={downloadSampleCSV}
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                                    >
+                                        <FileText size={16} />
+                                        サンプルCSVダウンロード
+                                    </button>
+                                </div>
+
+                                {uploadStatus && (
+                                    <div className={`mt-4 p-3 rounded-lg ${uploadStatus.includes('✓') ? 'bg-green-50 text-green-700' : uploadStatus.includes('❌') ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>
+                                        {uploadStatus}
+                                    </div>
+                                )}
+                                
+                                <div className="mt-4 p-4 bg-gray-50 rounded-lg text-sm">
+                                    <p className="font-semibold mb-2 text-gray-700">CSV形式:</p>
+                                    <code className="text-xs text-gray-600">
+                                        大学名,学部,学科,試験区分<br/>
+                                        東京大学,文学部,哲学科,前期<br/>
+                                        上智大学,文学部,,私立
+                                    </code>
+                                    <p className="mt-2 text-xs text-gray-500">※学科がない場合は空欄にしてください</p>
+                                </div>
+                            </div>
+
+                            {/* スプレッドシートへのリンク */}
+                            <div className="mb-8 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-6">
+                                <div className="flex items-center gap-3 mb-4">
+                                    <Database size={24} className="text-green-600" />
+                                    <h2 className="text-xl font-semibold text-gray-800">提出データを確認</h2>
+                                </div>
+                                
+                                <p className="text-sm text-gray-600 mb-4">
+                                    生徒が送信したデータはGoogleスプレッドシートに自動で保存されています。
+                                </p>
+                                
+                                <button
+                                    onClick={openSpreadsheet}
+                                    className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors"
+                                >
+                                    <ExternalLink size={20} />
+                                    スプレッドシートを開く
+                                </button>
+                                
+                                <p className="mt-3 text-xs text-gray-500 text-center">
+                                    ※Googleアカウントでのログインが必要です
+                                </p>
+                            </div>
+
+                            {/* 登録状況 */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                                <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                                    <Database size={20} />
+                                    現在の登録状況
+                                </h3>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-white rounded-lg p-4">
+                                        <p className="text-sm text-gray-600 mb-1">大学データ</p>
+                                        <p className="text-3xl font-bold text-blue-600">{Object.keys(universityData).length}</p>
+                                        <p className="text-xs text-gray-500 mt-1">件</p>
+                                    </div>
+                                    
+                                    <div className="bg-white rounded-lg p-4">
+                                        <p className="text-sm text-gray-600 mb-1">大学数</p>
+                                        <p className="text-3xl font-bold text-blue-600">{universityCount}</p>
+                                        <p className="text-xs text-gray-500 mt-1">校</p>
+                                    </div>
+                                </div>
+                                
+                                {examTypes.length > 0 && (
+                                    <div className="mt-4 bg-white rounded-lg p-4">
+                                        <p className="text-sm text-gray-600 mb-2">試験区分</p>
+                                        <div className="flex flex-wrap gap-2">
+                                            {examTypes.map((type, idx) => (
+                                                <span key={idx} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                                                    {type}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 使い方ガイド */}
+                            <div className="mt-8 p-6 bg-gray-50 rounded-lg">
+                                <h3 className="font-semibold text-gray-800 mb-3">使い方</h3>
+                                <ol className="space-y-2 text-sm text-gray-600">
+                                    <li className="flex gap-2">
+                                        <span className="font-bold text-blue-600">1.</span>
+                                        <span>大学データCSVを準備（サンプルCSVを参考に）</span>
+                                    </li>
+                                    <li className="flex gap-2">
+                                        <span className="font-bold text-blue-600">2.</span>
+                                        <span>「CSVファイルを選択」ボタンから読み込み</span>
+                                    </li>
+                                    <li className="flex gap-2">
+                                        <span className="font-bold text-blue-600">3.</span>
+                                        <span>生徒用フォームで大学データが選択可能になります</span>
+                                    </li>
+                                    <li className="flex gap-2">
+                                        <span className="font-bold text-blue-600">4.</span>
+                                        <span>提出されたデータは「スプレッドシートを開く」から確認</span>
+                                    </li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        ReactDOM.render(<AdminPanel />, document.getElementById('root'));
+    </script>
+</body>
+</html>
